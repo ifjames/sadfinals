@@ -1,7 +1,11 @@
 {
   "expo": {
-    "name": "authsystem",
-    "slug": "authsystem",
+    "name": "utilitypal",
+    "slug": "utilitypal",
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,9 +16,13 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bsit.utilitypal"
     },
     "android": {
+      "package": "com.bsit.utilitypal",
+      "versionCode": 1,
+      "permissions": [],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -22,6 +30,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a4a01109-0089-4fc0-9d16-b9e143433340"
+      }
     }
   }
 }

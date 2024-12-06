@@ -1,11 +1,43 @@
-import React, { useState, useRef } from "react";
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Animated, Dimensions, StatusBar } from "react-native";
+import { useState, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Animated, Dimensions, TouchableWithoutFeedback, ActivityIndicator, Alert } from "react-native";
+import { getFirestore, doc, getDoc } from "firebase/firestore";
+import { getAuth, signOut } from "firebase/auth";
+import { firebaseApp } from './db/firebase'; 
 
 const screenWidth = Dimensions.get("window").width;
 
 export default function HomeScreen({ navigation, route }) {
-  const { role } = route.params; // 'student' or 'teacher'
-  StatusBar.setHidden(true);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const auth = getAuth(firebaseApp);
+      const db = getFirestore(firebaseApp);
+      const currentUser = auth.currentUser;
+
+      if (currentUser) {
+        // Extract document ID dynamically from email
+        const emailPrefix = currentUser.email.split("@")[0];
+        const userDocRef = doc(db, "users", emailPrefix);
+
+        try {
+          const userDoc = await getDoc(userDocRef);
+
+          if (userDoc.exists()) {
+            setUser(userDoc.data()); // Set user data
+          } else {
+            //console.log("No such document!");
+          }
+        } catch (error) {
+          //console.error("Error fetching user document:", error);
+        }
+      }
+    };
+
+    fetchUser();
+  }, []);
+  
+
   const [menuVisible, setMenuVisible] = useState(false); // Track menu visibility
   const menuAnimation = useRef(new Animated.Value(-screenWidth)).current; // Initial position off-screen
   const isAnimating = useRef(false); // To track if an animation is in progress
@@ -38,122 +70,185 @@ export default function HomeScreen({ navigation, route }) {
     }
   };
 
-  const handleLogout = () => {
-    navigation.replace("LoginRegister"); // Navigate back to the login screen
+  const handleLogout = async () => {
+    try {
+      await signOut(getAuth()); // Signs out the user from Firebase
+      navigation.replace("LoginRegister"); // Navigate back to login screen
+    } catch (error) {
+      //console.error("Error signing out:", error);
+      // You can show an error message to the user if needed
+    }
   };
 
-  return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.menuIcon} onPress={toggleMenu}>
-          <View style={styles.menuBar} />
-          <View style={styles.menuBar} />
-          <View style={styles.menuBar} />
-        </TouchableOpacity>
-        <TouchableOpacity>
-          <Image
-            source={require("../assets/profileicon.png")}
-            style={styles.profileIcon}
-          />
-        </TouchableOpacity>
+  const handleOutsideTap = () => {
+    if (menuVisible) {
+      toggleMenu(); // Close the menu if open
+    }
+  };
+
+  if (!user) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#F1D5A8" />
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
+    );
+  }
 
-      {/* Main Content */}
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.welcomeSection}>
-          <Text style={styles.greeting}>Hello,</Text>
-          <Text style={styles.userName}>
-            {role === "student" ? "Camila!" : "Teacher!"}
-          </Text>
-        </View>
-        <View style={styles.campusNavigation}>
-          <Text style={styles.campusTitle}>Campus Navigation</Text>
-          <TouchableOpacity>
-            <Text style={styles.openMap}>Open Map &gt;</Text>
+  return (
+    <TouchableWithoutFeedback onPress={handleOutsideTap}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.menuIcon} onPress={toggleMenu}>
+            <View style={styles.menuBar} />
+            <View style={styles.menuBar} />
+            <View style={styles.menuBar} />
           </TouchableOpacity>
-          <Image
-            source={require("../assets/campusmap.png")}
-            style={styles.campusImage}
-          />
+          <TouchableOpacity onPress={() => navigation.navigate("Profile", { role: user.role })}>
+            <Image
+              source={require("../assets/profileicon.png")}
+              style={styles.profileIcon}
+            />
+          </TouchableOpacity>
         </View>
-        <View style={styles.needSection}>
-          <Text style={styles.needTitle}>What do you need?</Text>
-          <View style={styles.options}>
-            <TouchableOpacity style={styles.option}>
-              <Image
-                source={require("../assets/news.png")}
-                style={styles.optionIcon}
-              />
-              <Text style={styles.optionText}>News</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.option}>
-              <Image
-                source={require("../assets/events.png")}
-                style={styles.optionIcon}
-              />
-              <Text style={styles.optionText}>Events</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.option}>
-              <Image
-                source={require("../assets/schedule.png")}
-                style={styles.optionIcon}
-              />
-              <Text style={styles.optionText}>Schedule</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
 
-      {/* Animated Menu */}
-      <Animated.View
-        style={[styles.menu, { transform: [{ translateX: menuAnimation }] }]}
-      >
-        <TouchableOpacity style={styles.closeMenu} onPress={toggleMenu}>
-          <Text style={styles.closeMenuText}>✕</Text>
-        </TouchableOpacity>
-        <View style={styles.menuHeader}>
-          <Image
-            source={require("../assets/profileicon.png")}
-            style={styles.menuProfileIcon}
-          />
-          <View>
-            <Text style={styles.menuName}>
-              {role === "student" ? "Camila" : "Teacher"}
-            </Text>
-            <Text style={styles.menuRole}>
-              {role === "student" ? "Student" : "Teacher"}
+        <ScrollView contentContainerStyle={styles.scrollContainer}>
+          <View style={styles.welcomeSection}>
+            <Text style={styles.greeting}>Hello,</Text>
+            <Text style={styles.userName}>
+              <Text style={styles.userName}>{user.name}!</Text>
             </Text>
           </View>
-          <TouchableOpacity onPress={() => navigation.navigate("Profile")}>
-            <Text style={styles.arrowButton}>&gt;</Text>
+          <View style={styles.campusNavigation}>
+            <Image
+              source={require("../assets/logo.png")}
+              style={styles.campusImage}
+            />
+          </View>
+          <View style={styles.needSection}>
+            <Text style={styles.needTitle}>What do you need?</Text>
+            <View style={styles.options}>
+              <TouchableOpacity 
+              style={styles.option}
+              onPress={() => {
+                const auth = getAuth(firebaseApp);
+                const currentUser = auth.currentUser;
+              
+                if (currentUser && currentUser.email) {
+                  const userId = currentUser.email.split('@')[0]; // Use email prefix as document ID
+                  if (user && user.role === "Boarder") {
+                    navigation.navigate("BoarderBills", { userId: userId, role: user.role });
+                  } else if (user && user.role === "Landlord") {
+                    navigation.navigate("BillCalculator", { role: user.role });
+                  }
+                } else {
+                  Alert.alert("Error", "User is not authenticated or email is unavailable.");
+                }
+              }}
+                  
+              >
+                <Image
+                  source={require("../assets/news.png")}
+                  style={styles.optionIcon}
+                />
+                <Text style={styles.optionText}>Bills</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.option}
+                onPress={() => {
+                  if (user.role === "Boarder") {
+                    navigation.navigate("Room", { role: user.role });
+                  } else if (user.role === "Landlord") {
+                    navigation.navigate("Admin", { role: user.role });
+                  }
+                }}
+              >
+                <Image
+                  source={require("../assets/events.png")}
+                  style={styles.optionIcon}
+                />
+                <Text style={styles.optionText}>{user.role === "Landlord" ? "Admin" : "Room"}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.option}
+                onPress={() => {
+                  if (user.role === "Boarder") {
+                    navigation.navigate("BoarderSchedule", { role: user.role });
+                  } else if (user.role === "Landlord") {
+                    navigation.navigate("LandlordSchedule", { role: user.role });
+                  } else if (user.role === "Visitor") {
+                    alert("You are a visitor only");
+                  }
+                }}
+              >
+                <Image
+                  source={require("../assets/schedule.png")}
+                  style={styles.optionIcon}
+                />
+                <Text style={styles.optionText}>Schedule</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+
+        <Animated.View
+          style={[styles.menu, { transform: [{ translateX: menuAnimation }] }]}
+        >
+          <TouchableOpacity style={styles.closeMenu} onPress={toggleMenu}>
+            <Text style={styles.closeMenuText}>✕</Text>
           </TouchableOpacity>
-        </View>
-        <View style={styles.menuSection}>
-          <Text style={styles.sectionTitle}>General</Text>
-          <TouchableOpacity style={styles.menuItem}>
-            <Text style={styles.menuItemText}>Language</Text>
-            <Text style={styles.menuItemValue}>English</Text>
+          <View style={styles.menuHeader}>
+
+            <View style={styles.profileSection}>
+              <Image source={require("../assets/profileicon.png")} style={styles.menuProfileIcon} />
+              <View style={styles.profileDetails}>
+                <Text style={styles.profileName}>{user.name}</Text>
+                <Text style={styles.profileRole}>{user.role}</Text>
+              </View>
+
+              <TouchableOpacity onPress={() => navigation.navigate("Profile", { role: user.role })}>
+                <Text style={styles.arrowButton}>›</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <View style={styles.menuSection}>
+            <Text style={styles.sectionTitle}>General</Text>
+            <TouchableOpacity style={styles.menuItem}>
+              <Text style={styles.menuItemText}>Language</Text>
+              <Text style={styles.menuItemValue}>English</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate("FAQ")}
+            >
+              <Text style={styles.menuItemText}>FAQ</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutButtonText}>Logout</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate("FAQ")}
-          >
-            <Text style={styles.menuItemText}>FAQ</Text>
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
-      </Animated.View>
-    </View>
+        </Animated.View>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#fff",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: "#FFF8F1",
+  },
+  loadingText: {
+    fontSize: 18,
+    color: "#F1D5A8",
+    marginTop: 10,
   },
   scrollContainer: {
     paddingBottom: 20,
@@ -163,28 +258,29 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     padding: 20,
-    marginTop: 10,
   },
   menuIcon: {
     width: 30,
     height: 20,
+    marginTop: 20,
     justifyContent: "space-between",
   },
   menuBar: {
     width: "100%",
     height: 3,
-    backgroundColor: "#800000",
+    backgroundColor: "#DBC078",
     borderRadius: 2,
   },
   profileIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#E6E6E6",
+    marginTop: 20,
+    backgroundColor: "#DBC078",
   },
   welcomeSection: {
     padding: 20,
-    backgroundColor: "#800000",
+    backgroundColor: "#DBC078",
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
   },
@@ -199,27 +295,17 @@ const styles = StyleSheet.create({
   },
   campusNavigation: {
     margin: 20,
-    backgroundColor: "#FFE4D9",
+    backgroundColor: "#FBF4DB",
     borderRadius: 15,
     padding: 20,
   },
-  campusTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  openMap: {
-    fontSize: 16,
-    color: "#800000",
-    textAlign: "right",
-    marginBottom: 10,
-  },
   campusImage: {
-    width: "100%",
-    height: 150,
-    resizeMode: "contain",
-    borderRadius: 10,
+    width: "100%",        
+    height: 200,          
+    resizeMode: "cover",  
+    borderRadius: 10,     
   },
+  
   needSection: {
     paddingHorizontal: 20,
     marginTop: 20,
@@ -237,7 +323,7 @@ const styles = StyleSheet.create({
   },
   option: {
     alignItems: "center",
-    backgroundColor: "#FFF2E5",
+    backgroundColor: "#FBF4DB",
     paddingVertical: 20,
     paddingHorizontal: 15,
     borderRadius: 10,
@@ -251,60 +337,63 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#800000",
+    color: "#626262",
   },
   menu: {
     position: "absolute",
-    width: screenWidth,
+    top: 0,
+    left: 0,
     height: "100%",
-    backgroundColor: "#fff",
+    width: screenWidth * 0.8,
+    backgroundColor: "#FFF",
+    zIndex: 10,
     padding: 20,
     shadowColor: "#000",
     shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.5,
     shadowRadius: 5,
-    elevation: 10,
-    zIndex: 10,
-    top: 0,
-    left: 0,
+    elevation: 5,
   },
   closeMenu: {
     alignSelf: "flex-end",
-    padding: 10,
-    top: 20,
-    right: 20,
+    marginBottom: 20,
+    marginTop: 30,
   },
   closeMenuText: {
-    fontSize: 24,
-    color: "#800000",
+    fontSize: 20,
+    color: "#DBC078",
   },
   menuHeader: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 20,
   },
+  profileSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+  },
   menuProfileIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "#E6E6E6",
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     marginRight: 10,
   },
-  menuName: {
+   profileDetails: {
+    flex: 1,
+  },
+  profileName: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#333",
+    color: "#000",
   },
-  menuRole: {
+  profileRole: {
     fontSize: 14,
-    color: "#666",
+    color: "#DBC078",
   },
   arrowButton: {
     fontSize: 24,
-    color: "#800000",
-    position: "absolute",  // Absolute positioning
-    top: "-30%",  // Optional: Vertically center the button
-    transform: [{ translateX: 15 }],  // Optional: Adjust for perfect centering
+    color: "#DBC078",
   },
   menuSection: {
     marginTop: 20,
@@ -333,7 +422,7 @@ const styles = StyleSheet.create({
   logoutButton: {
     marginTop: "auto",
     alignSelf: "center",
-    backgroundColor: "#800000",
+    backgroundColor: "#DBC078",
     paddingVertical: 10,
     paddingHorizontal: 40,
     borderRadius: 5,
